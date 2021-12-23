@@ -1,0 +1,161 @@
+#include <DHT.h>; //Import DHT library
+#include "U8glib.h" // Import LCD library
+#include <VarSpeedServo.h>//Import Servo library
+U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE|U8G_I2C_OPT_DEV_0); // I2C / TWI
+#define DHTPIN 2 // what pin we're connected to
+#define DHTTYPE DHT22 // DHT 22 (AM2302)
+DHT dht(DHTPIN, DHTTYPE); //// Initialize DHT sensor for normal 16mhz Arduino
+#define DHTPIN2 4 // what pin we're connected to
+#define DHTTYPE2 DHT11 // DHT 22 (AM2302)
+DHT dht2(DHTPIN2, DHTTYPE2); //// Initialize DHT sensor for normal 16mhz Arduino
+VarSpeedServo myservo1; // create servo object to control a servo 1
+VarSpeedServo myservo2; // create servo object to control a servo 2
+unsigned long time; // Create variable of type long to store large values of time
+float hum; //Stores humidity value at the outlet
+float tempr; //Stores temperature value at the outlet
+float tempr2; //Stores temperature value at the tray
+unsigned long now; // Same use as the variable time for pulses for SSR
+float serialTime; // Delay to read the serial input
+const int numReadings = 10; // no. reading for average of temperature
+float readings[numReadings]; // the readings from the input temperature at tray
+int readIndex = 0; // the index of the current reading
+float total = 0; // the running total
+float average = 0; // the average
+int Input; // input for the set point
+int Setpoint = 40; // Set point
+// display humidity on LCD
+void draw1(void) {
+ // graphic commands to redraw the complete screen should be placed here
+ u8g.setFont(u8g_font_unifont);
+ u8g.setPrintPos(0, 20);
+// call procedure from base class, http://arduino.cc/en/Serial/Print
+u8g.print(hum);u8g.print(" %");
+ u8g.setScale2x2();
+}
+// display temperature on LCD
+void draw2(void) {
+ // graphic commands to redraw the complete screen should be placed here
+ u8g.setFont(u8g_font_unifont);
+ u8g.setPrintPos(0, 20);
+ // call procedure from base class, http://arduino.cc/en/Serial/Print
+ u8g.print(tempr2);u8g.print(" C");
+ u8g.setScale2x2();
+}
+void setup() {
+ Serial.begin(9600);
+ hum = dht.readHumidity(); //Calling dht method to read humidity
+ tempr= dht.readTemperature(); //Calling dht method to read temperature upper
+ tempr2= dht2.readTemperature();//Calling dht method to read temperature lower
+
+ // put your setup code here, to run once:
+pinMode(3, OUTPUT); // Output to SSR
+unsigned long now = millis(); //Saving the start time
+//For data logging purpose
+ myservo1.attach(6); // attaches the servo 1 on pin 9 to the servo object
+ myservo1.write(0,255,false);
+// set the initial position of the servo, as fast as possible, run in background
+ myservo2.attach(5); // attaches the servo 2 on pin 5 to the servo object
+ myservo2.write(170,255,true);
+// set the initial position of the servo, as fast as possible, wait until done
+delay(2000); // wait for servo to stop
+Serial.println("CLEARDATA"); //clears up any data left from previous projects
+//Inserting 'LABEL' So Excel knows the next things will be the names of the columns
+Serial.println("LABEL,Prsent
+Time,Duration,Temperature_Lower,Temperature_Upper,Humidity,Set_point,...");
+Serial.println("RESETTIMER"); //resets timer to 0 for excel
+
+ for (int thisReading = 0; thisReading < numReadings; thisReading++) {
+ readings[thisReading] = 0;
+}
+}
+void loop() {
+now = millis(); // obtain the starting time
+ hum = dht.readHumidity(); //Calling dht method to read humidity
+ tempr= dht.readTemperature(); //Calling dht method to read temperature upper
+ tempr2= dht2.readTemperature();//Calling dht method to read temperature lower
+
+//Exhaust close______________________________________________________________________
+ if((now >= 1000 && now <=4000 )||(now >= 8103000 && now <=8106000 ) || (now >=
+15300000 && now <= 15303000) || (now >= 22500000 && now <= 22503000) || (now >=
+29700000 && now <= 29703000)|| (now >= 36000000 && now <= 36003000))// before 2 hours
+ {
+ myservo1.attach(6);
+ myservo1.write(0,127,false); // move the servo to 127 deg, fast speed, run
+background
+ myservo2.attach(5);
+ myservo2.write(170,127,true); // move the servo to 170 deg, fast speed, wait
+until done
+delay(3000);
+//Disable servos to save power
+ myservo1.detach();
+ myservo2.detach();
+ }
+//Exhaust open________________________________________________________________________
+ if((now >= 7200000 && now <=7203000 ) || (now >= 14400000 && now <= 14403000) ||
+(now >= 21600000 && now <= 21603000) || (now >= 28800000 && now <= 28803000)|| (now >=
+36000000 && now <= 36003000))
+ {
+ myservo1.attach(6); // attaches the servo on pin 9 to the servo object
+ myservo1.write(130,127,false); // set the initial position of the servo, as fast as
+possible, run in background
+ myservo2.attach(5); // attaches the servo on pin 9 to the servo object
+ myservo2.write(20,127,true); // set the initial position of the servo, as fast as
+possible, wait until done
+delay(3000);
+//Disable servos to save power
+ myservo1.detach();
+ myservo2.detach();}
+//___________________________________________________________________________________
+// remove any noise value out of range
+if( tempr2>=0 && tempr2 <= 100){
+ total = total - readings[readIndex];
+ // read from the sensor and find the average
+ readings[readIndex] = tempr2;
+ // add the reading to the total:
+ total = total + readings[readIndex];
+ // advance to the next position in the array:
+ readIndex = readIndex + 1;
+ // if we're at the end of the array...
+ if (readIndex >= numReadings) {
+ // ...wrap around to the beginning:
+ readIndex = 0;
+ }
+// calculate the average:
+ tempr2 = total / numReadings;}
+//enable the code below to provide step inputs for every 2 hours
+//if((now >= 7200000 && now <=7202000 ) || (now >= 14400000 && now <= 14402000) ||
+(now >= 21600000 && now <= 21602000) || (now >= 28800000 && now <= 28802000)|| (now >=
+36000000 && now <= 36002000))
+//{ Setpoint = Setpoint + 2;
+//delay(2000);
+//}
+// Code for On/Off control
+if(tempr2 < Setpoint){
+digitalWrite(3,HIGH); // high signal to SSR when temperature is below set point
+delay(500);}
+else
+{digitalWrite(3,LOW); // Low signal to SSR when temperature is above set point
+delay(500);
+}
+ u8g.firstPage(); //display LCD with temperature
+ do {
+ draw1();
+ } while( u8g.nextPage() );
+if(now> serialTime) // Code for data logging
+{
+ Serial.print("DATA,TIME,TIMER,");
+ Serial.print(tempr2);
+ Serial.print(",");
+ Serial.print(tempr);
+ Serial.print(",");
+ Serial.print(hum);
+ Serial.print(",");
+ Serial.println(Setpoint);
+ Serial.println("...");
+ serialTime+=2000;
+ u8g.firstPage(); //display LCD again with humidity
+ do {
+ draw2();
+ } while( u8g.nextPage() );
+}
+}
